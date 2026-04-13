@@ -10,7 +10,7 @@ export default function CompressorPage() {
   const [quality, setQuality] = useState(75);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<{ blob: Blob; filename: string; provider?: string; notes?: string }>();
+  const [result, setResult] = useState<{ blob: Blob; filename: string; provider?: string }>();
 
   const mode = file ? detectMode(file) : 'image';
 
@@ -39,8 +39,7 @@ export default function CompressorPage() {
     setResult({
       blob,
       filename: filenameMatch?.[1] ?? 'compressed.bin',
-      provider: response.headers.get('X-Toolhub-Provider') ?? undefined,
-      notes: response.headers.get('X-Toolhub-Notes') || undefined
+      provider: response.headers.get('X-Toolhub-Provider') ?? undefined
     });
 
     setLoading(false);
@@ -59,7 +58,7 @@ export default function CompressorPage() {
         {loading ? 'Compressing...' : 'Compress'}
       </button>
       {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
-      <ResultPanel output={result?.blob} filename={result?.filename} provider={result?.provider} notes={result?.notes} beforeSize={file?.size} afterSize={result?.blob.size} />
+      <ResultPanel output={result?.blob} filename={result?.filename} provider={result?.provider} beforeSize={file?.size} afterSize={result?.blob.size} />
     </div>
   );
 }

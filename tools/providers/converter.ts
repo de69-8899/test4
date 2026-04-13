@@ -36,117 +36,42 @@ export class LocalImageConverterProvider implements ImageConverterProvider {
       };
     }
 
-    if (format === 'pdf' && (file.type.startsWith('text/') || file.type === 'text/html')) {
-      const text = sourceBuffer.toString('utf-8').replace(/<[^>]*>/g, '');
+    if (format === 'pdf' && file.type.startsWith('text/')) {
+      const text = sourceBuffer.toString('utf-8');
       const pdf = await createTextPdf(text);
       return {
         filename: `${baseName}.pdf`,
         mimeType: 'application/pdf',
         data: pdf,
-        provider: 'local-pdf-lib',
-        notes: file.type === 'text/html' ? 'HTML converted via text extraction in local mode.' : undefined
+        provider: 'local-pdf-lib'
       };
     }
 
-    throw new Error('Unsupported local conversion. Configure advanced external conversion for this format pair.');
+    if (format === 'pdf' && file.type === 'text/html') {
+      const htmlText = sourceBuffer.toString('utf-8').replace(/<[^>]*>/g, '');
+      const pdf = await createTextPdf(htmlText);
+      return {
+        filename: `${baseName}.pdf`,
+        mimeType: 'application/pdf',
+        data: pdf,
+        provider: 'local-pdf-lib',
+        notes: 'HTML is converted to plain text before PDF generation in MVP mode.'
+      };
+    }
+
+    throw new Error('Unsupported local conversion. Use external provider adapters for this format pair.');
   }
 }
 
-export class CloudConvertProvider implements ImageConverterProvider {
-  private apiKey = process.env.CLOUDCONVERT_API_KEY;
-
-  async convert({ file, targetFormat }: ConvertInput): Promise<ConvertOutput> {
-    if (!this.apiKey) {
-      throw new Error('Missing CLOUDCONVERT_API_KEY.');
-    }
-
-    const source = Buffer.from(await file.arrayBuffer()).toString('base64');
-    const target = targetFormat.toLowerCase();
-
-    const body = {
-      tasks: {
-        import: {
-          operation: 'import/base64',
-          file: source,
-          filename: file.name
-        },
-        convert: {
-          operation: 'convert',
-          input: 'import',
-          output_format: target,
-          engine: 'office'
-        },
-        export: {
-          operation: 'export/url',
-          input: 'convert',
-          inline: false,
-          archive_multiple_files: false
-        }
-      },
-      tag: 'toolhub-convert'
-    };
-
-    const response = await fetch('https://api.cloudconvert.com/v2/jobs', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
-    });
-
-    if (!response.ok) {
-      throw new Error(`CloudConvert error (${response.status}).`);
-    }
-
-    const job = (await response.json()) as { data: { id: string } };
-    const output = await pollCloudConvertResult(job.data.id, this.apiKey);
-
-    const downloadResponse = await fetch(output.url);
-    if (!downloadResponse.ok) {
-      throw new Error('Failed to download converted file from CloudConvert.');
-    }
-
-    const data = Buffer.from(await downloadResponse.arrayBuffer());
-    return {
-      filename: output.filename,
-      mimeType: output.content_type ?? 'application/octet-stream',
-      data,
-      provider: 'cloudconvert-advanced'
-    };
+export class ExternalConversionProvider implements ImageConverterProvider {
+  async convert(): Promise<ConvertOutput> {
+    throw new Error('External conversion provider is not configured yet. Set CONVERTER_PROVIDER=external and implement API calls.');
   }
 }
 
 export function getConverterProvider(): ImageConverterProvider {
-  const provider = process.env.CONVERTER_PROVIDER ?? 'auto';
-  if (provider === 'external' || (provider === 'auto' && process.env.CLOUDCONVERT_API_KEY)) {
-    return new CloudConvertProvider();
-  }
-  return new LocalImageConverterProvider();
-}
-
-async function pollCloudConvertResult(jobId: string, apiKey: string) {
-  for (let attempt = 0; attempt < 15; attempt += 1) {
-    const result = await fetch(`https://api.cloudconvert.com/v2/jobs/${jobId}`, {
-      headers: { Authorization: `Bearer ${apiKey}` }
-    });
-
-    if (!result.ok) throw new Error('Failed polling CloudConvert job.');
-
-    const payload = (await result.json()) as {
-      data: { status: string; tasks: Array<{ name: string; status: string; result?: { files?: Array<{ filename: string; url: string; content_type?: string }> } }> };
-    };
-
-    const exportTask = payload.data.tasks.find((task) => task.name === 'export');
-    const file = exportTask?.result?.files?.[0];
-
-    if (payload.data.status === 'finished' && file) return file;
-    if (payload.data.status === 'error') throw new Error('CloudConvert job failed.');
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-
-  throw new Error('CloudConvert job timeout.');
+  const provider = process.env.CONVERTER_PROVIDER ?? 'local';
+  return provider === 'external' ? new ExternalConversionProvider() : new LocalImageConverterProvider();
 }
 
 async function createTextPdf(text: string): Promise<Buffer> {

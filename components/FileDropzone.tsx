@@ -13,7 +13,7 @@ export function FileDropzone({ file, onFile, accept }: Props) {
 
   return (
     <div
-      className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-6 text-center dark:border-slate-700 dark:bg-slate-900"
+      className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-6 text-center"
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
@@ -31,11 +31,11 @@ export function FileDropzone({ file, onFile, accept }: Props) {
           if (selected) onFile(selected);
         }}
       />
-      <p className="text-sm text-slate-600 dark:text-slate-300">Drag & drop a file here, or</p>
+      <p className="text-sm text-slate-600">Drag & drop a file here, or</p>
       <button type="button" className="mt-2 rounded-md bg-indigo-600 px-3 py-2 text-sm text-white" onClick={() => inputRef.current?.click()}>
         Browse file
       </button>
-      {file ? <p className="mt-3 text-sm text-slate-700 dark:text-slate-200">Selected: {file.name}</p> : null}
+      {file ? <p className="mt-3 text-sm text-slate-700">Selected: {file.name}</p> : null}
     </div>
   );
 }
