@@ -1,6 +1,6 @@
 # ToolHub
 
-ToolHub is a lightweight, modular online tools starter built with Next.js App Router + TypeScript and optimized for Vercel Hobby.
+ToolHub is a modular all-in-one tools web app starter built for **Next.js App Router + TypeScript** and deployable on **Vercel Hobby**.
 
 ## 1) Folder structure
 
@@ -20,55 +20,44 @@ app/
 components/
   FileDropzone.tsx
   ResultPanel.tsx
+  ThemeProvider.tsx
+  ThemeToggle.tsx
   ToolCard.tsx
 lib/
   format.ts
   validation.ts
 tools/
   modules/
-    bgRemover.ts
-    compressor.ts
-    converter.ts
   providers/
-    backgroundRemoval.ts
-    compression.ts
-    converter.ts
   registry.ts
 types/
-  tool.ts
-.env.example
-README.md
 ```
 
-## 2) Architecture overview
+## 2) Architecture explanation
 
-- **Modular plugin system**
-  - Each tool is defined as a module (`tools/modules/*`) with `id`, `name`, `description`, `route`, `icon`, `category`, `supportedFormats`, and `enabled`.
-  - A central registry (`tools/registry.ts`) exposes enabled tools for the home dashboard.
-- **Provider/adapter pattern**
-  - Providers abstract heavy processing and can be swapped using env flags.
-  - Implemented interfaces:
-    - `ImageConverterProvider` (`tools/providers/converter.ts`)
-    - `CompressionProvider` (`tools/providers/compression.ts`)
-    - `BackgroundRemovalProvider` (`tools/providers/backgroundRemoval.ts`)
-  - Each provider includes:
-    - Local MVP implementation (`Local*Provider`)
-    - External placeholder (`External*Provider`) for future APIs.
-- **Serverless-first**
-  - Route handlers in `app/api/*` keep execution short.
-  - Enforced size limit (8MB) in `lib/validation.ts`.
+- **Plugin-style tool registry** (`tools/registry.ts`): each tool module defines `id`, `name`, `description`, `route`, `icon`, `category`, `supportedFormats`, `enabled`.
+- **Provider/adapter architecture** (`tools/providers/*`):
+  - `converter.ts`: local conversions + advanced **CloudConvert** adapter.
+  - `compression.ts`: local compression + advanced **TinyPNG** and configurable enterprise PDF API adapter.
+  - `backgroundRemoval.ts`: local fallback + advanced **remove.bg** adapter.
+- **Provider mode switch** via env: `external | local`.
+  - `external` is the default and uses advanced APIs.
+- **Shared layers**:
+  - UI: dropzone, result panel, theme controls.
+  - Utilities: validation + formatting.
+  - API routes: lightweight route handlers with provider dispatch.
 
-## 3) Code (file-by-file key notes)
+## 3) Code (file-by-file)
 
-- `app/api/convert/route.ts`: Conversion API endpoint with provider selection and error handling.
-- `app/api/compress/route.ts`: Compression endpoint with `quality` + mode (`image|zip|pdf`).
-- `app/api/remove-bg/route.ts`: Background removal endpoint returning transparent PNG.
-- `tools/providers/converter.ts`: Image conversion with `sharp`, text/html-to-pdf with `pdf-lib`, plus external adapter placeholder.
-- `tools/providers/compression.ts`: Image compression with `sharp`, zip compression with `jszip`, PDF placeholder via external adapter.
-- `tools/providers/backgroundRemoval.ts`: Lightweight near-white background remover mock and external adapter placeholder.
-- `components/FileDropzone.tsx`: drag-and-drop + click upload.
-- `components/ResultPanel.tsx`: before/after size, ratio, provider metadata, download CTA.
-- Tool pages (`app/tools/*/page.tsx`): mobile-first workflows with loading and error states.
+- `app/layout.tsx`: app shell + theme provider + theme mode toggle.
+- `components/ThemeProvider.tsx`: system theme detection (`prefers-color-scheme`) + persisted user override.
+- `components/ThemeToggle.tsx`: manual `system/light/dark` switch.
+- `app/api/convert/route.ts`: conversion endpoint.
+- `app/api/compress/route.ts`: compression endpoint.
+- `app/api/remove-bg/route.ts`: background remover endpoint.
+- `tools/providers/converter.ts`: local + CloudConvert advanced adapter.
+- `tools/providers/compression.ts`: local + TinyPNG/advanced PDF API adapter.
+- `tools/providers/backgroundRemoval.ts`: local + remove.bg advanced adapter.
 
 ## 4) Setup
 
@@ -77,64 +66,49 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`.
-
 ## 5) .env.example
 
-See `.env.example` for provider switch flags and external API placeholders.
+See `.env.example` for default external-mode advanced API keys.
 
-## 6) Vercel deployment guide (Hobby)
+## 6) Vercel deployment guide
 
-1. Push this repo to GitHub.
-2. Import project in Vercel.
-3. Framework preset: **Next.js**.
-4. Add environment variables from `.env.example`.
-5. Deploy.
+1. Push repo to GitHub.
+2. Import into Vercel.
+3. Add env vars from `.env.example`.
+4. Deploy.
 
-Vercel optimization notes:
-- Keep files <= 8MB in MVP.
-- Avoid long-running processing in route handlers.
-- Route handlers use Node runtime only when needed.
-- Heavy operations are abstracted behind external providers.
+### Vercel Hobby optimization
 
-## 7) How to add a new tool
+- 8MB file cap for MVP route safety.
+- Route handlers return quickly and avoid long local CPU tasks.
+- Heavy conversions routed to external APIs when configured.
 
-1. Add a module definition in `tools/modules/newTool.ts`.
-2. Register it in `tools/registry.ts`.
-3. Add UI page at `app/tools/new-tool/page.tsx`.
-4. Add route handler(s) under `app/api/...`.
-5. Create/extend provider interface under `tools/providers/`.
-6. Document format support and limitations in README.
+## 7) How to add new tool
 
-## 8) Notes on format support & limitations
+1. Add module metadata in `tools/modules/*`.
+2. Register in `tools/registry.ts`.
+3. Add UI page at `app/tools/<tool>/page.tsx`.
+4. Add route handler at `app/api/<tool>/route.ts`.
+5. Add provider interface + local/external adapters.
+
+## 8) Format support & limitations
 
 ### File Converter
-- **Implemented locally**:
-  - Images: JPG/JPEG/PNG/WEBP (using `sharp`)
-  - TXT -> PDF (using `pdf-lib`)
-  - HTML -> PDF (plain-text extraction MVP)
-- **Scaffolded via provider abstraction**:
-  - PDF -> TXT robust extraction
-  - DOCX/PPTX, audio/video conversion
-  - Advanced GIF/SVG transformations
+- Local: JPG/JPEG/PNG/WEBP, TXT->PDF, HTML->PDF (text extraction).
+- Advanced external: CloudConvert for broader doc/audio/video workflows.
+- Still recommended to avoid heavy synchronous video processing in Hobby functions.
 
 ### File Compressor
-- **Implemented locally**:
-  - JPG/PNG/WEBP with quality slider
-  - ZIP compression
-- **Scaffolded**:
-  - PDF compression (external provider)
+- Local: image quality compression and ZIP creation.
+- Advanced external: TinyPNG image compression, configurable enterprise PDF compression endpoint.
 
-### Background Remover
-- **Implemented locally (MVP mock)**:
-  - Near-white background -> transparent PNG
-- **Scaffolded**:
-  - Production-grade AI segmentation via external provider.
+### Image Background Remover
+- Local fallback: near-white transparency mock.
+- Advanced external: remove.bg API (transparent PNG output).
 
 ## Roadmap
 
-- **PDF tools**: merge/split using `pdf-lib` plus page-level previews.
-- **Image resizer**: add width/height presets and keep aspect-ratio lock.
-- **OCR**: external OCR API adapter (avoid heavy OCR runtime on Hobby tier).
-- **Video tools**: external API/worker adapter with async job polling.
-
+- PDF tools: merge/split
+- Image resizer
+- OCR (external API adapter)
+- Video tools (external API + async jobs)

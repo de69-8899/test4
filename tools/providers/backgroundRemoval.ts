@@ -45,19 +45,45 @@ export class LocalBackgroundRemovalProvider implements BackgroundRemovalProvider
       data: transparentPng,
       mimeType: 'image/png',
       provider: 'local-threshold-mock',
-      notes: 'MVP provider removes near-white background only. Replace with external AI API for production quality.'
+      notes: 'MVP fallback removed near-white background only.'
     };
   }
 }
 
-export class ExternalBackgroundRemovalProvider implements BackgroundRemovalProvider {
-  async remove(): Promise<BackgroundRemoveOutput> {
-    throw new Error('External background removal provider is not configured.');
+export class RemoveBgProvider implements BackgroundRemovalProvider {
+  private apiKey = process.env.REMOVEBG_API_KEY;
+
+  async remove({ file }: BackgroundRemoveInput): Promise<BackgroundRemoveOutput> {
+    if (!this.apiKey) throw new Error('Missing REMOVEBG_API_KEY for advanced background removal.');
+
+    const body = new FormData();
+    body.append('image_file', file);
+    body.append('size', 'preview');
+    body.append('format', 'png');
+
+    const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+      method: 'POST',
+      headers: {
+        'X-Api-Key': this.apiKey
+      },
+      body
+    });
+
+    if (!response.ok) {
+      throw new Error(`remove.bg failed (${response.status}).`);
+    }
+
+    return {
+      filename: `${file.name.replace(/\.[^.]+$/, '')}.transparent.png`,
+      data: Buffer.from(await response.arrayBuffer()),
+      mimeType: 'image/png',
+      provider: 'removebg-advanced'
+    };
   }
 }
 
 export function getBackgroundRemovalProvider(): BackgroundRemovalProvider {
-  return (process.env.BG_REMOVAL_PROVIDER ?? 'local') === 'external'
-    ? new ExternalBackgroundRemovalProvider()
-    : new LocalBackgroundRemovalProvider();
+  const provider = process.env.BG_REMOVAL_PROVIDER ?? 'external';
+  if (provider === 'local') return new LocalBackgroundRemovalProvider();
+  return new RemoveBgProvider();
 }

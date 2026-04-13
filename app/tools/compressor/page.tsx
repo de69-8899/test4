@@ -10,7 +10,7 @@ export default function CompressorPage() {
   const [quality, setQuality] = useState(75);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<{ blob: Blob; filename: string; provider?: string }>();
+  const [result, setResult] = useState<{ blob: Blob; filename: string; provider?: string; notes?: string }>();
 
   const mode = file ? detectMode(file) : 'image';
 
@@ -39,7 +39,8 @@ export default function CompressorPage() {
     setResult({
       blob,
       filename: filenameMatch?.[1] ?? 'compressed.bin',
-      provider: response.headers.get('X-Toolhub-Provider') ?? undefined
+      provider: response.headers.get('X-Toolhub-Provider') ?? undefined,
+      notes: response.headers.get('X-Toolhub-Notes') || undefined
     });
 
     setLoading(false);
@@ -49,8 +50,8 @@ export default function CompressorPage() {
     <div>
       <h1 className="mb-4 text-xl font-semibold">File Compressor</h1>
       <FileDropzone file={file} onFile={setFile} />
-      <p className="mt-3 text-sm text-slate-600">Detected mode: {mode}</p>
-      <label className="mt-4 block text-sm">
+      <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Detected mode: {mode}</p>
+      <label className="mt-4 block text-sm text-slate-700 dark:text-slate-200">
         Compression quality: {quality}
         <input type="range" min={10} max={95} value={quality} onChange={(event) => setQuality(Number(event.target.value))} className="mt-1 w-full" />
       </label>
@@ -58,7 +59,7 @@ export default function CompressorPage() {
         {loading ? 'Compressing...' : 'Compress'}
       </button>
       {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
-      <ResultPanel output={result?.blob} filename={result?.filename} provider={result?.provider} beforeSize={file?.size} afterSize={result?.blob.size} />
+      <ResultPanel output={result?.blob} filename={result?.filename} provider={result?.provider} notes={result?.notes} beforeSize={file?.size} afterSize={result?.blob.size} />
     </div>
   );
 }

@@ -48,7 +48,7 @@ export default function ConverterPage() {
     <div>
       <h1 className="mb-4 text-xl font-semibold">File Converter</h1>
       <FileDropzone file={file} onFile={setFile} />
-      <label className="mt-4 block text-sm">
+      <label className="mt-4 block text-sm text-slate-700 dark:text-slate-200">
         Target format
         <select className="mt-1 w-full rounded-md border p-2" value={targetFormat} onChange={(event) => setTargetFormat(event.target.value)}>
           {formats.map((format) => (

@@ -3,9 +3,16 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
+  --bg: #f8fafc;
+  --fg: #0f172a;
+}
+
+.dark {
+  --bg: #020617;
+  --fg: #e2e8f0;
 }
 
 body {
-  @apply bg-slate-50 text-slate-900;
+  background: var(--bg);
+  color: var(--fg);
 }

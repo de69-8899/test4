@@ -23,7 +23,8 @@ export async function POST(req: Request) {
       headers: {
         'Content-Type': result.mimeType,
         'Content-Disposition': `attachment; filename="${result.filename}"`,
-        'X-Toolhub-Provider': result.provider
+        'X-Toolhub-Provider': result.provider,
+        'X-Toolhub-Notes': result.notes ?? ''
       }
     });
   } catch (error) {
