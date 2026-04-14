@@ -31,11 +31,7 @@ export class LocalBackgroundRemovalProvider implements BackgroundRemovalProvider
     }
 
     const transparentPng = await sharp(data, {
-      raw: {
-        width: info.width,
-        height: info.height,
-        channels: info.channels
-      }
+      raw: { width: info.width, height: info.height, channels: info.channels }
     })
       .png()
       .toBuffer();
@@ -44,40 +40,36 @@ export class LocalBackgroundRemovalProvider implements BackgroundRemovalProvider
       filename: `${file.name.replace(/\.[^.]+$/, '')}.transparent.png`,
       data: transparentPng,
       mimeType: 'image/png',
-      provider: 'local-threshold-mock',
+      provider: 'local-open-source',
       notes: 'MVP fallback removed near-white background only.'
     };
   }
 }
 
-export class RemoveBgProvider implements BackgroundRemovalProvider {
-  private apiKey = process.env.REMOVEBG_API_KEY;
+export class FreeAdvancedBackgroundRemovalProvider implements BackgroundRemovalProvider {
+  private endpoint = process.env.FREE_BG_REMOVAL_API_URL;
+  private apiKey = process.env.FREE_BG_REMOVAL_API_KEY;
 
   async remove({ file }: BackgroundRemoveInput): Promise<BackgroundRemoveOutput> {
-    if (!this.apiKey) throw new Error('Missing REMOVEBG_API_KEY for advanced background removal.');
+    if (!this.endpoint) throw new Error('Missing FREE_BG_REMOVAL_API_URL.');
 
     const body = new FormData();
-    body.append('image_file', file);
-    body.append('size', 'preview');
-    body.append('format', 'png');
+    body.append('file', file);
 
-    const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+    const response = await fetch(this.endpoint, {
       method: 'POST',
-      headers: {
-        'X-Api-Key': this.apiKey
-      },
+      headers: this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : undefined,
       body
     });
 
-    if (!response.ok) {
-      throw new Error(`remove.bg failed (${response.status}).`);
-    }
+    if (!response.ok) throw new Error(`Free background-removal API failed (${response.status}).`);
 
     return {
       filename: `${file.name.replace(/\.[^.]+$/, '')}.transparent.png`,
       data: Buffer.from(await response.arrayBuffer()),
       mimeType: 'image/png',
-      provider: 'removebg-advanced'
+      provider: 'free-advanced-bg-api',
+      notes: 'Point FREE_BG_REMOVAL_API_URL to a free advanced model endpoint (e.g. HuggingFace Space / Cloudflare AI Worker).'
     };
   }
 }
@@ -85,5 +77,5 @@ export class RemoveBgProvider implements BackgroundRemovalProvider {
 export function getBackgroundRemovalProvider(): BackgroundRemovalProvider {
   const provider = process.env.BG_REMOVAL_PROVIDER ?? 'external';
   if (provider === 'local') return new LocalBackgroundRemovalProvider();
-  return new RemoveBgProvider();
+  return new FreeAdvancedBackgroundRemovalProvider();
 }

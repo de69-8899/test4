@@ -35,7 +35,7 @@ export class LocalCompressionProvider implements CompressionProvider {
         filename: `${baseName}.compressed.${outputFormat === 'jpeg' ? 'jpg' : outputFormat}`,
         mimeType: `image/${outputFormat}`,
         data,
-        provider: 'local-sharp'
+        provider: 'local-open-source'
       };
     }
 
@@ -47,83 +47,42 @@ export class LocalCompressionProvider implements CompressionProvider {
         filename: `${baseName}.zip`,
         mimeType: 'application/zip',
         data,
-        provider: 'local-jszip'
+        provider: 'local-open-source'
       };
     }
 
-    throw new Error('PDF compression should use advanced external APIs.');
+    throw new Error('PDF compression requires FREE_COMPRESSION_API_URL in external mode.');
   }
 }
 
-export class AdvancedCompressionProvider implements CompressionProvider {
-  private tinyPngKey = process.env.TINYPNG_API_KEY;
-  private advancedPdfEndpoint = process.env.ADVANCED_PDF_COMPRESS_API_URL;
+export class FreeAdvancedCompressionProvider implements CompressionProvider {
+  private endpoint = process.env.FREE_COMPRESSION_API_URL;
+  private apiKey = process.env.FREE_COMPRESSION_API_KEY;
 
-  async compress({ file, mode }: CompressInput): Promise<CompressOutput> {
-    if (mode === 'image') return this.compressImage(file);
-    if (mode === 'pdf') return this.compressPdf(file);
-    throw new Error('ZIP mode is currently local-only for Vercel cost control.');
-  }
-
-  private async compressImage(file: File): Promise<CompressOutput> {
-    if (!this.tinyPngKey) throw new Error('Missing TINYPNG_API_KEY for advanced image compression.');
-
-    const sourceBuffer = Buffer.from(await file.arrayBuffer());
-    const shrinkResponse = await fetch('https://api.tinify.com/shrink', {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${Buffer.from(`api:${this.tinyPngKey}`).toString('base64')}`
-      },
-      body: sourceBuffer
-    });
-
-    if (!shrinkResponse.ok) throw new Error(`TinyPNG compression failed (${shrinkResponse.status}).`);
-    const outputUrl = shrinkResponse.headers.get('Location');
-    if (!outputUrl) throw new Error('TinyPNG did not return output location.');
-
-    const outputResponse = await fetch(outputUrl, {
-      headers: {
-        Authorization: `Basic ${Buffer.from(`api:${this.tinyPngKey}`).toString('base64')}`
-      }
-    });
-
-    if (!outputResponse.ok) throw new Error('TinyPNG output download failed.');
-
-    const result = Buffer.from(await outputResponse.arrayBuffer());
-    const extension = file.name.split('.').pop() ?? 'png';
-
-    return {
-      filename: `${file.name.replace(/\.[^.]+$/, '')}.compressed.${extension}`,
-      mimeType: file.type,
-      data: result,
-      provider: 'tinypng-advanced'
-    };
-  }
-
-  private async compressPdf(file: File): Promise<CompressOutput> {
-    if (!this.advancedPdfEndpoint) {
-      throw new Error('Set ADVANCED_PDF_COMPRESS_API_URL for advanced PDF compression provider.');
-    }
+  async compress({ file, quality, mode }: CompressInput): Promise<CompressOutput> {
+    if (!this.endpoint) throw new Error('Missing FREE_COMPRESSION_API_URL.');
 
     const body = new FormData();
     body.append('file', file);
+    body.append('quality', String(quality));
+    body.append('mode', mode);
 
-    const response = await fetch(this.advancedPdfEndpoint, {
+    const response = await fetch(this.endpoint, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.ADVANCED_PDF_COMPRESS_API_KEY ?? ''}`
-      },
+      headers: this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : undefined,
       body
     });
 
-    if (!response.ok) throw new Error(`Advanced PDF API failed (${response.status}).`);
+    if (!response.ok) throw new Error(`Free compression API failed (${response.status}).`);
+
+    const ext = mode === 'zip' ? 'zip' : mode === 'pdf' ? 'pdf' : file.name.split('.').pop() ?? 'bin';
 
     return {
-      filename: `${file.name.replace(/\.[^.]+$/, '')}.compressed.pdf`,
-      mimeType: 'application/pdf',
+      filename: `${file.name.replace(/\.[^.]+$/, '')}.compressed.${ext}`,
+      mimeType: response.headers.get('Content-Type') ?? 'application/octet-stream',
       data: Buffer.from(await response.arrayBuffer()),
-      provider: 'advanced-pdf-api',
-      notes: 'PDF endpoint should point to your preferred enterprise compression API.'
+      provider: 'free-advanced-compression-api',
+      notes: 'Point FREE_COMPRESSION_API_URL to a free advanced compression backend (Cloudflare Worker/imgproxy/oss service).'
     };
   }
 }
@@ -131,5 +90,5 @@ export class AdvancedCompressionProvider implements CompressionProvider {
 export function getCompressionProvider(): CompressionProvider {
   const provider = process.env.COMPRESSION_PROVIDER ?? 'external';
   if (provider === 'local') return new LocalCompressionProvider();
-  return new AdvancedCompressionProvider();
+  return new FreeAdvancedCompressionProvider();
 }

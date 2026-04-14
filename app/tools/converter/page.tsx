@@ -50,9 +50,9 @@ export default function ConverterPage() {
       <FileDropzone file={file} onFile={setFile} />
       <label className="mt-4 block text-sm text-slate-700 dark:text-slate-200">
         Target format
-        <select className="mt-1 w-full rounded-md border p-2" value={targetFormat} onChange={(event) => setTargetFormat(event.target.value)}>
+        <select className="mt-1 w-full rounded-md border border-slate-300 bg-white p-2 text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" value={targetFormat} onChange={(event) => setTargetFormat(event.target.value)}>
           {formats.map((format) => (
-            <option key={format}>{format}</option>
+            <option key={format} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">{format}</option>
           ))}
         </select>
       </label>

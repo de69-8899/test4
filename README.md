@@ -37,11 +37,11 @@ types/
 
 - **Plugin-style tool registry** (`tools/registry.ts`): each tool module defines `id`, `name`, `description`, `route`, `icon`, `category`, `supportedFormats`, `enabled`.
 - **Provider/adapter architecture** (`tools/providers/*`):
-  - `converter.ts`: local conversions + advanced **CloudConvert** adapter.
-  - `compression.ts`: local compression + advanced **TinyPNG** and configurable enterprise PDF API adapter.
-  - `backgroundRemoval.ts`: local fallback + advanced **remove.bg** adapter.
+  - `converter.ts`: local conversions + advanced **free API adapter**.
+  - `compression.ts`: local compression + advanced **free compression API adapter**.
+  - `backgroundRemoval.ts`: local fallback + advanced **free background-removal API adapter**.
 - **Provider mode switch** via env: `external | local`.
-  - `external` is the default and uses advanced APIs.
+  - `external` is the default and uses free advanced APIs.
 - **Shared layers**:
   - UI: dropzone, result panel, theme controls.
   - Utilities: validation + formatting.
@@ -55,9 +55,9 @@ types/
 - `app/api/convert/route.ts`: conversion endpoint.
 - `app/api/compress/route.ts`: compression endpoint.
 - `app/api/remove-bg/route.ts`: background remover endpoint.
-- `tools/providers/converter.ts`: local + CloudConvert advanced adapter.
-- `tools/providers/compression.ts`: local + TinyPNG/advanced PDF API adapter.
-- `tools/providers/backgroundRemoval.ts`: local + remove.bg advanced adapter.
+- `tools/providers/converter.ts`: local + free advanced adapter.
+- `tools/providers/compression.ts`: local + free advanced compression adapter.
+- `tools/providers/backgroundRemoval.ts`: local + free advanced background-removal adapter.
 
 ## 4) Setup
 
@@ -68,7 +68,7 @@ npm run dev
 
 ## 5) .env.example
 
-See `.env.example` for default external-mode advanced API keys.
+See `.env.example` for default external-mode free advanced API endpoints/keys.
 
 ## 6) Vercel deployment guide
 
@@ -95,16 +95,16 @@ See `.env.example` for default external-mode advanced API keys.
 
 ### File Converter
 - Local: JPG/JPEG/PNG/WEBP, TXT->PDF, HTML->PDF (text extraction).
-- Advanced external: CloudConvert for broader doc/audio/video workflows.
+- Advanced external: free advanced converter endpoint for broader doc/audio/video workflows.
 - Still recommended to avoid heavy synchronous video processing in Hobby functions.
 
 ### File Compressor
 - Local: image quality compression and ZIP creation.
-- Advanced external: TinyPNG image compression, configurable enterprise PDF compression endpoint.
+- Advanced external: free advanced compression endpoint (image/pdf/zip depending on your provider).
 
 ### Image Background Remover
 - Local fallback: near-white transparency mock.
-- Advanced external: remove.bg API (transparent PNG output).
+- Advanced external: free advanced background-removal endpoint (transparent PNG output).
 
 ## Roadmap
 
