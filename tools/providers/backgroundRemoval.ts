@@ -1,0 +1,76 @@
+import sharp from 'sharp';
+
+export interface BackgroundRemoveInput {
+  file: File;
+}
+
+export interface BackgroundRemoveOutput {
+  filename: string;
+  data: Buffer;
+  mimeType: string;
+  provider: string;
+  notes?: string;
+}
+
+export interface BackgroundRemovalProvider {
+  remove(input: BackgroundRemoveInput): Promise<BackgroundRemoveOutput>;
+}
+
+export class LocalBackgroundRemovalProvider implements BackgroundRemovalProvider {
+  async remove({ file }: BackgroundRemoveInput): Promise<BackgroundRemoveOutput> {
+    const sourceBuffer = Buffer.from(await file.arrayBuffer());
+    const image = sharp(sourceBuffer).ensureAlpha();
+    const { data, info } = await image.raw().toBuffer({ resolveWithObject: true });
+
+    for (let index = 0; index < data.length; index += info.channels) {
+      const r = data[index];
+      const g = data[index + 1];
+      const b = data[index + 2];
+      if (r > 235 && g > 235 && b > 235) data[index + 3] = 0;
+    }
+
+    return {
+      filename: `${file.name.replace(/\.[^.]+$/, '')}.transparent.png`,
+      data: await sharp(data, { raw: { width: info.width, height: info.height, channels: info.channels } }).png().toBuffer(),
+      mimeType: 'image/png',
+      provider: 'local-open-source',
+      notes: 'MVP fallback removed near-white background only.'
+    };
+  }
+}
+
+export class RemoveBgProvider implements BackgroundRemovalProvider {
+  private apiKey = process.env.REMOVEBG_API_KEY;
+  private apiUrl = 'https://api.remove.bg/v1.0/removebg';
+
+  async remove({ file }: BackgroundRemoveInput): Promise<BackgroundRemoveOutput> {
+    if (!this.apiKey) throw new Error('Missing REMOVEBG_API_KEY.');
+
+    const body = new FormData();
+    body.append('image_file', file);
+    body.append('size', 'preview');
+    body.append('format', 'png');
+
+    const response = await fetch(this.apiUrl, {
+      method: 'POST',
+      headers: { 'X-Api-Key': this.apiKey },
+      body
+    });
+
+    if (!response.ok) throw new Error(`remove.bg failed (${response.status}).`);
+
+    return {
+      filename: `${file.name.replace(/\.[^.]+$/, '')}.transparent.png`,
+      data: Buffer.from(await response.arrayBuffer()),
+      mimeType: 'image/png',
+      provider: 'removebg-api',
+      notes: 'Uses https://api.remove.bg/v1.0/removebg.'
+    };
+  }
+}
+
+export function getBackgroundRemovalProvider(): BackgroundRemovalProvider {
+  const provider = process.env.BG_REMOVAL_PROVIDER ?? 'external';
+  if (provider === 'local') return new LocalBackgroundRemovalProvider();
+  return new RemoveBgProvider();
+}
