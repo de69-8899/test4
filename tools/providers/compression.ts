@@ -51,38 +51,40 @@ export class LocalCompressionProvider implements CompressionProvider {
       };
     }
 
-    throw new Error('PDF compression requires FREE_COMPRESSION_API_URL in external mode.');
+    throw new Error('PDF compression requires external provider.');
   }
 }
 
-export class FreeAdvancedCompressionProvider implements CompressionProvider {
-  private endpoint = process.env.FREE_COMPRESSION_API_URL;
-  private apiKey = process.env.FREE_COMPRESSION_API_KEY;
+export class TinifyCompressionProvider implements CompressionProvider {
+  private apiKey = process.env.TINYPNG_API_KEY;
+  private apiUrl = 'https://api.tinify.com/';
 
-  async compress({ file, quality, mode }: CompressInput): Promise<CompressOutput> {
-    if (!this.endpoint) throw new Error('Missing FREE_COMPRESSION_API_URL.');
+  async compress({ file, mode }: CompressInput): Promise<CompressOutput> {
+    if (!this.apiKey) throw new Error('Missing TINYPNG_API_KEY.');
+    if (mode !== 'image') throw new Error('Tinify API supports image compression only in this integration.');
 
-    const body = new FormData();
-    body.append('file', file);
-    body.append('quality', String(quality));
-    body.append('mode', mode);
+    const input = Buffer.from(await file.arrayBuffer());
+    const auth = `Basic ${Buffer.from(`api:${this.apiKey}`).toString('base64')}`;
 
-    const response = await fetch(this.endpoint, {
+    const shrink = await fetch(`${this.apiUrl}shrink`, {
       method: 'POST',
-      headers: this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : undefined,
-      body
+      headers: { Authorization: auth },
+      body: input
     });
 
-    if (!response.ok) throw new Error(`Free compression API failed (${response.status}).`);
+    if (!shrink.ok) throw new Error(`Tinify compression failed (${shrink.status}).`);
+    const outputUrl = shrink.headers.get('Location');
+    if (!outputUrl) throw new Error('Tinify response missing output URL.');
 
-    const ext = mode === 'zip' ? 'zip' : mode === 'pdf' ? 'pdf' : file.name.split('.').pop() ?? 'bin';
+    const output = await fetch(outputUrl, { headers: { Authorization: auth } });
+    if (!output.ok) throw new Error('Tinify output download failed.');
 
     return {
-      filename: `${file.name.replace(/\.[^.]+$/, '')}.compressed.${ext}`,
-      mimeType: response.headers.get('Content-Type') ?? 'application/octet-stream',
-      data: Buffer.from(await response.arrayBuffer()),
-      provider: 'free-advanced-compression-api',
-      notes: 'Point FREE_COMPRESSION_API_URL to a free advanced compression backend (Cloudflare Worker/imgproxy/oss service).'
+      filename: `${file.name.replace(/\.[^.]+$/, '')}.compressed.${file.name.split('.').pop() ?? 'png'}`,
+      mimeType: output.headers.get('Content-Type') ?? file.type,
+      data: Buffer.from(await output.arrayBuffer()),
+      provider: 'tinify-api',
+      notes: 'Uses https://api.tinify.com/.'
     };
   }
 }
@@ -90,5 +92,5 @@ export class FreeAdvancedCompressionProvider implements CompressionProvider {
 export function getCompressionProvider(): CompressionProvider {
   const provider = process.env.COMPRESSION_PROVIDER ?? 'external';
   if (provider === 'local') return new LocalCompressionProvider();
-  return new FreeAdvancedCompressionProvider();
+  return new TinifyCompressionProvider();
 }

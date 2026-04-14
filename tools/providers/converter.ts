@@ -48,60 +48,110 @@ export class LocalImageConverterProvider implements ImageConverterProvider {
       };
     }
 
-    throw new Error('Unsupported local conversion. Configure FREE_CONVERTER_API_URL for advanced free API conversion.');
+    throw new Error('Unsupported local conversion. Configure CLOUDCONVERT_API_KEY for advanced conversion.');
   }
 }
 
-export class FreeAdvancedConverterProvider implements ImageConverterProvider {
-  private endpoint = process.env.FREE_CONVERTER_API_URL;
-  private apiKey = process.env.FREE_CONVERTER_API_KEY;
+export class CloudConvertProvider implements ImageConverterProvider {
+  private apiKey = process.env.CLOUDCONVERT_API_KEY;
+  private baseUrl = 'https://api.cloudconvert.com/v2/';
 
   async convert({ file, targetFormat }: ConvertInput): Promise<ConvertOutput> {
-    if (!this.endpoint) throw new Error('Missing FREE_CONVERTER_API_URL.');
+    if (!this.apiKey) throw new Error('Missing CLOUDCONVERT_API_KEY.');
 
-    const body = new FormData();
-    body.append('file', file);
-    body.append('targetFormat', targetFormat);
+    const body = {
+      tasks: {
+        import: {
+          operation: 'import/base64',
+          file: Buffer.from(await file.arrayBuffer()).toString('base64'),
+          filename: file.name
+        },
+        convert: {
+          operation: 'convert',
+          input: 'import',
+          output_format: targetFormat.toLowerCase()
+        },
+        export: {
+          operation: 'export/url',
+          input: 'convert'
+        }
+      }
+    };
 
-    const response = await fetch(this.endpoint, {
+    const createJob = await fetch(`${this.baseUrl}jobs`, {
       method: 'POST',
-      headers: this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : undefined,
-      body
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
     });
 
-    if (!response.ok) throw new Error(`Free converter API failed (${response.status}).`);
+    if (!createJob.ok) throw new Error(`CloudConvert create job failed (${createJob.status}).`);
+
+    const job = (await createJob.json()) as { data: { id: string } };
+    const fileResult = await this.pollJob(job.data.id);
+
+    const download = await fetch(fileResult.url);
+    if (!download.ok) throw new Error('CloudConvert download failed.');
 
     return {
-      filename: `${file.name.replace(/\.[^.]+$/, '')}.${targetFormat}`,
-      mimeType: response.headers.get('Content-Type') ?? 'application/octet-stream',
-      data: Buffer.from(await response.arrayBuffer()),
-      provider: 'free-advanced-converter-api',
-      notes: 'Point FREE_CONVERTER_API_URL to a free advanced conversion backend (Cloudflare Worker/Gotenberg/LibreOffice service).'
+      filename: fileResult.filename,
+      mimeType: fileResult.content_type ?? 'application/octet-stream',
+      data: Buffer.from(await download.arrayBuffer()),
+      provider: 'cloudconvert-api',
+      notes: 'Uses https://api.cloudconvert.com/v2/.'
     };
+  }
+
+  private async pollJob(jobId: string): Promise<{ filename: string; url: string; content_type?: string }> {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const response = await fetch(`${this.baseUrl}jobs/${jobId}`, {
+        headers: { Authorization: `Bearer ${this.apiKey}` }
+      });
+
+      if (!response.ok) throw new Error('CloudConvert polling failed.');
+
+      const payload = (await response.json()) as {
+        data: {
+          status: string;
+          tasks: Array<{ name: string; result?: { files?: Array<{ filename: string; url: string; content_type?: string }> } }>;
+        };
+      };
+
+      const file = payload.data.tasks.find((task) => task.name === 'export')?.result?.files?.[0];
+      if (payload.data.status === 'finished' && file) return file;
+      if (payload.data.status === 'error') throw new Error('CloudConvert job failed.');
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    throw new Error('CloudConvert job timed out.');
   }
 }
 
 export function getConverterProvider(): ImageConverterProvider {
   const provider = process.env.CONVERTER_PROVIDER ?? 'external';
   if (provider === 'local') return new LocalImageConverterProvider();
-  return new FreeAdvancedConverterProvider();
+  return new CloudConvertProvider();
 }
 
 async function createTextPdf(text: string): Promise<Buffer> {
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595, 842]);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const lines = text.split(/\r?\n/).slice(0, 80);
 
-  lines.forEach((line, index) => {
-    page.drawText(line.slice(0, 100), {
-      x: 36,
-      y: 800 - index * 16,
-      font,
-      size: 11,
-      color: rgb(0, 0, 0)
+  text.split(/\r?\n/)
+    .slice(0, 80)
+    .forEach((line, index) => {
+      page.drawText(line.slice(0, 100), {
+        x: 36,
+        y: 800 - index * 16,
+        font,
+        size: 11,
+        color: rgb(0, 0, 0)
+      });
     });
-  });
 
   return Buffer.from(await pdfDoc.save());
 }
